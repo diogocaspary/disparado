@@ -25,6 +25,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Necessário para os engines nativos do Prisma (schema-engine/query-engine)
+# detectarem e carregarem a libssl corretamente no Alpine.
+RUN apk add --no-cache openssl
+
 # Instala apenas dependências de produção
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
