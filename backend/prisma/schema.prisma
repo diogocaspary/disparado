@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  TENANT_ADMIN
+}
+
+enum CampaignStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+enum MessageStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users           User[]
+  metaCredential  MetaCredential?
+  templates       MessageTemplate[]
+  contacts        Contact[]
+  campaigns       Campaign[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String?
+  email        String   @unique
+  passwordHash String
+  role         Role
+  name         String
+  createdAt    DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model MetaCredential {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  wabaId        String
+  phoneNumberId String
+  accessToken   String
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model MessageTemplate {
+  id              String    @id @default(cuid())
+  tenantId        String
+  metaTemplateId  String
+  name            String
+  language        String
+  category        String
+  status          String
+  bodyText        String
+  variablesCount  Int
+  componentsJson  String
+  syncedAt        DateTime  @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  campaigns Campaign[]
+
+  @@unique([tenantId, metaTemplateId])
+  @@index([tenantId])
+}
+
+model Contact {
+  id               String   @id @default(cuid())
+  tenantId         String
+  campaignId       String?
+  name             String
+  whatsapp         String
+  planValue        String
+  dueDate          String
+  invoiceCode      String
+  extraFieldsJson  String?
+  createdAt        DateTime @default(now())
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  campaign         Campaign?         @relation(fields: [campaignId], references: [id])
+  campaignMessages CampaignMessage[]
+
+  @@index([tenantId])
+  @@index([campaignId])
+}
+
+model Campaign {
+  id                 String         @id @default(cuid())
+  tenantId           String
+  templateId         String
+  name               String
+  status             CampaignStatus @default(DRAFT)
+  messagesPerMinute  Int
+  intervalSeconds    Int
+  createdById        String
+  createdAt          DateTime       @default(now())
+  startedAt          DateTime?
+  finishedAt         DateTime?
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  template MessageTemplate   @relation(fields: [templateId], references: [id])
+  contacts Contact[]
+  messages CampaignMessage[]
+
+  @@index([tenantId])
+}
+
+model CampaignMessage {
+  id            String        @id @default(cuid())
+  campaignId    String
+  contactId     String
+  status        MessageStatus @default(PENDING)
+  metaMessageId String?
+  errorMessage  String?
+  sentAt        DateTime?
+  createdAt     DateTime      @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  contact  Contact  @relation(fields: [contactId], references: [id])
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([campaignId, status])
+}

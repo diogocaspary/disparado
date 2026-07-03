@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - uneixo_broadcaster_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - uneixo_broadcaster_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      PORT: ${BACKEND_PORT}
+    ports:
+      # Exposta ao host apenas para acesso direto/depuração da API, se necessário.
+      # O frontend acessa o backend pela rede interna (http://backend:${BACKEND_PORT}).
+      - "${BACKEND_HOST_PORT}:${BACKEND_PORT}"
+    networks:
+      - uneixo_broadcaster_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      BACKEND_URL: http://backend:${BACKEND_PORT}
+    ports:
+      - "${FRONTEND_HOST_PORT}:80"
+    networks:
+      - uneixo_broadcaster_net
+
+networks:
+  uneixo_broadcaster_net:
+    driver: bridge
+
+volumes:
+  uneixo_broadcaster_db_data:
